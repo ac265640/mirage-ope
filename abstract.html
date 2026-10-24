@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MIRAGE — Perceptron Hackathon 2026 Round 1</title>
+<style>
+  @page { size: A4; margin: 14mm 15mm 13mm 15mm; }
+  :root { --ink:#16202a; --navy:#12324a; --amber:#b8740a; --red:#b03a2e; --green:#1e7a46; --muted:#56616b; --rule:#d9dee3; }
+  * { box-sizing: border-box; }
+  body { margin:0; color:var(--ink); background:#fff; font: 9.6pt/1.42 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  header { border-bottom: 2px solid var(--navy); padding-bottom: 6px; margin-bottom: 8px; }
+  .kicker { font-size: 8pt; letter-spacing: .08em; text-transform: uppercase; color: var(--amber); font-weight: 700; }
+  h1 { font-size: 16.5pt; line-height: 1.15; margin: 3px 0 3px; color: var(--navy); }
+  .sub { font-size: 10pt; color: var(--muted); margin: 0 0 5px; font-style: italic; }
+  .meta { display:flex; flex-wrap:wrap; gap: 4px 16px; font-size: 8.3pt; color: var(--muted); }
+  .meta b { color: var(--ink); }
+  h2 { font-size: 10.2pt; color: var(--navy); margin: 8px 0 2px; padding-left: 6px; border-left: 3px solid var(--amber); }
+  p { margin: 0 0 4px; text-align: justify; hyphens: auto; }
+  ul { margin: 0 0 4px; padding-left: 15px; }
+  li { margin: 0 0 2px; }
+  .lbl { font-weight: 700; color: var(--navy); }
+  .verdict { font-weight: 700; color: var(--green); }
+  .diagram-page { break-before: page; }
+  .diagram-page h1 { font-size: 13pt; margin: 0 0 2px; }
+  .diagram-page .sub { margin-bottom: 4px; }
+  svg { width: 100%; height: auto; display:block; }
+  .proto { margin: 8px 0 0; break-inside: avoid; }
+  .proto img { width: 100%; display: block; border: 1px solid var(--rule); border-radius: 4px; }
+  .proto figcaption { font-size: 7.9pt; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+  .refs { font-size: 7.6pt; color: var(--muted); margin-top: 6px; border-top: 1px solid var(--rule); padding-top: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker">Perceptron Hackathon 2026 · Round 1 Abstract · Theme 2 — Cause and Effect in AI Decisions · Problem 3</div>
+  <h1>MIRAGE: Did the New Quoting Strategy Make Money, or Did It Just Look Like It?</h1>
+  <p class="sub">Counterfactual evaluation of market-making policies, with uncertainty and sensitivity to hidden informed flow</p>
+  <div class="meta"><span>Team <b>SoftMax</b></span><span>Team ID <b>TM-916D5658C90</b></span><span>Leader <b>Amit Singh Chauhan</b></span><span>Member <b>Anandita Thakur</b></span></div>
+</header>
+
+<main class="abstract">
+<h2>1. Problem &amp; Theme</h2>
+<p>We chose Problem 3 and set it inside a market maker’s quoting desk, where “did the new strategy work?” is asked daily and often answered wrongly. A quoting policy decides which trades it receives: tight quotes win fills, including from informed traders who pick it off. So the policy shapes the very PnL used to judge it: exactly this problem’s trap.</p>
+
+<h2>2. Understanding of the Challenge</h2>
+<p>A before/after number fails for three reasons. <span class="lbl">(i) Regime confounding:</span> if the new policy launched in a calm week, the PnL jump is volatility, not strategy. <span class="lbl">(ii) Support:</span> production quoting is near-deterministic, so logs barely contain the actions a new policy would take; importance weights explode and estimates become extrapolation. <span class="lbl">(iii) Hidden confounding:</span> desks react to information that is never logged (e.g. a sense that flow is toxic). Logged propensities are then wrong and no estimator is unbiased; the honest answer is a bound, not a number. A credible system must estimate, quantify uncertainty, and state how much hidden bias would overturn its conclusion.</p>
+
+<h2>3. Proposed Approach</h2>
+<ul>
+<li><span class="lbl">Simulator with ground truth.</span> A Python/Numba limit-order-book simulator with Poisson noise traders, a two-state Markov volatility regime, and Glosten–Milgrom-style informed traders holding a private signal <i>U</i> about the future mid-price. Our market maker picks one of 9 actions per decision (half-spread {1,2,3} ticks × inventory skew {−1,0,+1}) from context <i>x</i> = (realised volatility, book imbalance, inventory, recent signed flow, spread). Because we own the simulator, any policy’s true value is obtained by replaying it on identical random seeds.</li>
+<li><span class="lbl">Logged data.</span> Production policy π₀ is a softmax (temperature τ) over a rule-based score and also sees a noisy copy of <i>U</i> with strength β, but only (<i>x</i>, <i>a</i>, π₀(<i>a</i>|<i>x</i>), <i>r</i>) is logged. Reward <i>r</i> is the <i>h</i>-step markout PnL of any fill minus an inventory penalty λ<i>I</i>², the standard desk metric, keeping each decision close to a contextual bandit.</li>
+<li><span class="lbl">Estimator bank.</span> Via Open Bandit Pipeline (obp): IPS, SNIPS, Direct Method (LightGBM reward model), cross-fitted Doubly Robust, Switch-DR and DRos, against two naive baselines (before/after PnL; replay-matching).</li>
+<li><span class="lbl">Uncertainty → decision.</span> Episode-level block-bootstrap CIs and an empirical-Bernstein high-confidence lower bound (HCOPE). The system says <span class="verdict">DEPLOY</span> only if the lower bound on V(π₁) − V(π₀) is positive.</li>
+<li><span class="lbl">Sensitivity.</span> A marginal sensitivity model (true vs. logged propensity odds within [1/Γ, Γ]) with sharp quantile-balancing bounds, reporting the breakdown Γ* at which the verdict flips.</li>
+<li><span class="lbl">Policy Court.</span> Streamlit dashboard comparing naive, every estimator and the truth; drag Γ and watch the verdict flip.</li>
+</ul>
+
+<h2>4. Minimum Viable</h2>
+<p><span class="lbl">(a) Standard OPE:</span> IPS and DR running on simulator logs and on the Open Bandit Dataset. <span class="lbl">(b) Concrete divergence:</span> a scripted “calm-week launch” where naive before/after shows a large gain while both the true value and DR show a loss (already reproduced, Fig. A).</p>
+
+<h2>5. Stretch Ambitions</h2>
+<p>Both listed goals: CIs plus HCOPE (uncertainty), then Γ-sensitivity bounds (unobserved confounding). Beyond them, a support stress test sweeping τ to map where each estimator breaks.</p>
+
+<h2>6. Novelty / Differentiation</h2>
+<ul>
+<li>To our knowledge, no published OPE work targets market-making quote policies with markout rewards; we bring causal evaluation to the sponsor’s core decision.</li>
+<li><span class="lbl">Validated sensitivity analysis.</span> Sensitivity bounds are normally unverifiable. Our simulator dials the true confounding strength β, so we compute the actual Γ and test whether the bounds really contain the truth.</li>
+<li>We output a decision with a guarantee, not a point estimate.</li>
+</ul>
+
+<h2>7. Evaluation Plan</h2>
+<p>Ground truth from simulator replay (≥10⁵ decisions per policy, 30 seeds) across 50 candidate policies. Metrics: relative error vs. true value, sign accuracy of uplift, CI coverage and width, effective sample size, Γ-bound coverage at the true Γ, and deploy-decision accuracy and regret vs. naive A/B. Real-data check: on the Open Bandit Dataset, estimate the Bernoulli Thompson Sampling policy’s CTR from uniform-random logs and compare with its on-policy CTR (Saito et al., 2021 protocol). Simulator realism: fat-tailed returns, volatility clustering, negative informed-fill markouts.</p>
+
+<h2>8. Feasibility &amp; Risks</h2>
+<p><span class="lbl">Already de-risked.</span> A working prototype (github.com/ac265640/mirage-ope; 3 spread actions, no order book yet) reproduces the core claims across 10 independent seeds: naive before/after gets the sign wrong 10/10, DR gets it right 10/10 with its 95% CI covering the truth 10/10, and mean error drops from 0.63 to 0.03 ticks/decision. Under hidden confounding, nominal OPE wrongly says “deploy” 10/10, while MSM bounds contain the truth at the true Γ 10/10 and flag the verdict as fragile (Γ* = 1.4–2.3).</p>
+<p>CPU-only Python with open libraries. <span class="lbl">Roles:</span> Amit — simulator, data pipeline and Policy Court dashboard (built end-to-end Python/Pandas, PostgreSQL and Power BI analytics in his CustomerLens project); Anandita — estimator bank and Open Bandit validation; sensitivity analysis shared. <span class="lbl">Milestones:</span> Wk1 simulator + truth oracle; Wk2 estimators + calm-week case (MVP); Wk3 CIs, HCOPE, OBD validation (midway report, 1 Dec); Wk4 confounding knob + Γ-bounds; Wk5 50-policy benchmark, dashboard, rehearsal.</p>
+<p><span class="lbl">Risks:</span> simulator judged unrealistic → stylised-fact calibration plus the real-data OBD check; inventory carry-over breaks the bandit assumption → short-horizon markouts with inventory in context, measuring residual bias against full-episode truth.</p>
+</main>
+
+<figure class="proto">
+  <img src="prototype/results/prototype_results.png" alt="Prototype results: calm-week trap, support stress test, sensitivity bounds">
+  <figcaption><b>Prototype results (toy world, seed 7).</b> A: naive +0.47 ticks/decision vs. truth −0.19; DR −0.16 [95% CI −0.24, −0.08]. B: as π₀ turns deterministic, tight quotes vanish from stressed-market logs and every estimator fails. C: nominal OPE says π₁ wins; the bounds overturn that at Γ* = 1.73 and contain the truth at the true Γ.</figcaption>
+</figure>
+
+<div class="refs">Key references: Saito et al., Open Bandit Dataset &amp; Pipeline (NeurIPS D&amp;B 2021) · Dudík et al., Doubly Robust Policy Evaluation (ICML 2011) · Su et al., DR with Optimistic Shrinkage (ICML 2020) · Thomas et al., High-Confidence Off-Policy Evaluation (AAAI 2015) · Kallus &amp; Zhou, Confounding-Robust Policy Improvement (NeurIPS 2018) · Dorn &amp; Guo, Sharp Sensitivity Analysis for IPW via Quantile Balancing (JASA 2023) · Glosten &amp; Milgrom (JFE 1985).</div>
+
+<section class="diagram-page">
+  <div class="kicker">Architecture · Team SoftMax · TM-916D5658C90</div>
+  <h1>MIRAGE: system architecture</h1>
+  <p class="sub">The left column is the world the desk lives in. The right column is what only a simulator can give us: the truth.</p>
+<svg viewBox="0 0 800 990" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#12324a"/></marker>
+    <marker id="arR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b03a2e"/></marker>
+    <marker id="arG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e7a46"/></marker>
+  </defs>
+  <style>
+    .box{fill:#f4f7fa;stroke:#12324a;stroke-width:1.4}
+    .sub{fill:#fff;stroke:#8aa0b3;stroke-width:1}
+    .hid{fill:#fdf0ee;stroke:#b03a2e;stroke-width:1.4}
+    .tru{fill:#eef8f1;stroke:#1e7a46;stroke-width:1.4}
+    .chip{fill:#fff;stroke:#12324a;stroke-width:1}
+    .bad{fill:#fdf0ee;stroke:#b03a2e;stroke-width:1}
+    .t{font-size:13px;font-weight:700;fill:#12324a}
+    .s{font-size:11px;fill:#16202a}
+    .m{font-size:10.5px;fill:#56616b}
+    .r{font-size:11px;fill:#b03a2e;font-weight:700}
+    .g{font-size:11px;fill:#1e7a46}
+    .gt{font-size:13px;font-weight:700;fill:#1e7a46}
+    .c{font-size:10.5px;fill:#12324a;font-weight:700}
+    .flow{stroke:#12324a;stroke-width:1.5;fill:none}
+    .hflow{stroke:#b03a2e;stroke-width:1.5;fill:none;stroke-dasharray:5 4}
+    .tflow{stroke:#1e7a46;stroke-width:1.5;fill:none;stroke-dasharray:6 3}
+  </style>
+
+  <!-- 1 simulator -->
+  <rect class="box" x="20" y="10" width="520" height="160" rx="8"/>
+  <text class="t" x="34" y="32">① Market simulator (Python/Numba limit order book)</text>
+  <rect class="sub" x="34" y="46" width="155" height="108" rx="6"/>
+  <text class="c" x="111" y="66" text-anchor="middle">Volatility regime</text>
+  <text class="s" x="111" y="86" text-anchor="middle">2-state Markov</text>
+  <text class="s" x="111" y="102" text-anchor="middle">calm ↔ stressed</text>
+  <text class="m" x="111" y="124" text-anchor="middle">source of the</text>
+  <text class="m" x="111" y="138" text-anchor="middle">“calm-week” trap</text>
+  <rect class="sub" x="198" y="46" width="155" height="108" rx="6"/>
+  <text class="c" x="275" y="66" text-anchor="middle">Noise traders</text>
+  <text class="s" x="275" y="86" text-anchor="middle">Poisson arrivals</text>
+  <text class="s" x="275" y="102" text-anchor="middle">market + limit orders</text>
+  <text class="m" x="275" y="124" text-anchor="middle">fat tails, vol</text>
+  <text class="m" x="275" y="138" text-anchor="middle">clustering checked</text>
+  <rect class="hid" x="362" y="46" width="164" height="108" rx="6"/>
+  <text class="c" x="444" y="66" text-anchor="middle" fill="#b03a2e">Informed traders</text>
+  <text class="s" x="444" y="86" text-anchor="middle">Glosten–Milgrom style</text>
+  <text class="s" x="444" y="102" text-anchor="middle">private signal U on</text>
+  <text class="s" x="444" y="118" text-anchor="middle">future mid-price</text>
+  <text class="r" x="444" y="140" text-anchor="middle">U = hidden confounder</text>
+
+  <!-- oracle -->
+  <rect class="tru" x="560" y="10" width="220" height="160" rx="8"/>
+  <text class="gt" x="574" y="32">Ground-truth oracle</text>
+  <text class="s" x="574" y="56">Replay any candidate π₁</text>
+  <text class="s" x="574" y="72">on identical random seeds</text>
+  <text class="s" x="574" y="88">(common random numbers)</text>
+  <text class="g" x="574" y="114">→ true V(π₁), exact up to</text>
+  <text class="g" x="574" y="130">   Monte-Carlo error</text>
+  <text class="m" x="574" y="154">≥10⁵ decisions × 30 seeds</text>
+  <path class="tflow" d="M540,90 L558,90" marker-end="url(#arG)"/>
+
+  <!-- 2 policy -->
+  <rect class="box" x="20" y="210" width="520" height="92" rx="8"/>
+  <text class="t" x="34" y="232">② Production quoting policy π₀ (the desk)</text>
+  <text class="s" x="34" y="252">9 actions: half-spread {1,2,3} ticks × inventory skew {−1, 0, +1}</text>
+  <text class="s" x="34" y="270">context x: realised vol, book imbalance, inventory, signed flow, spread</text>
+  <text class="s" x="34" y="288">softmax with temperature τ → propensity π₀(a|x) logged</text>
+  <path class="flow" d="M110,170 L110,208" marker-end="url(#ar)"/>
+  <text class="m" x="116" y="194">x</text>
+  <path class="hflow" d="M444,154 L444,208" marker-end="url(#arR)"/>
+  <text class="r" x="450" y="194">noisy U, strength β</text>
+
+  <!-- 3 logs -->
+  <rect class="box" x="20" y="340" width="520" height="82" rx="8"/>
+  <text class="t" x="34" y="362">③ Logged data</text>
+  <text class="s" x="34" y="382">(x, a, π₀(a|x), r)    r = h-step markout PnL of fill − λ·inventory²</text>
+  <text class="r" x="34" y="406">✗ U is never logged → logged propensities are wrong</text>
+  <path class="flow" d="M280,302 L280,338" marker-end="url(#ar)"/>
+  <text class="m" x="286" y="325">fills → markouts</text>
+
+  <!-- OBD -->
+  <rect class="tru" x="560" y="210" width="220" height="212" rx="8"/>
+  <text class="gt" x="574" y="232">Real-data check</text>
+  <text class="s" x="574" y="254">Open Bandit Dataset</text>
+  <text class="s" x="574" y="270">(ZOZOTOWN, Saito et al.)</text>
+  <text class="s" x="574" y="296">Uniform-random logs</text>
+  <text class="s" x="574" y="312">→ estimate Bernoulli TS</text>
+  <text class="s" x="574" y="328">policy’s CTR</text>
+  <text class="g" x="574" y="354">BTS on-policy CTR</text>
+  <text class="g" x="574" y="370">= real ground truth</text>
+  <text class="m" x="574" y="398">answers “it’s only a toy”</text>
+
+  <!-- 4 estimators -->
+  <rect class="box" x="20" y="460" width="760" height="112" rx="8"/>
+  <text class="t" x="34" y="482">④ Estimator bank (Open Bandit Pipeline)</text>
+  <g>
+    <rect class="bad" x="34" y="496" width="84" height="30" rx="5"/><text class="c" x="76" y="515" text-anchor="middle" fill="#b03a2e">Naive A/B</text>
+    <rect class="bad" x="126" y="496" width="84" height="30" rx="5"/><text class="c" x="168" y="515" text-anchor="middle" fill="#b03a2e">Replay match</text>
+    <rect class="chip" x="218" y="496" width="84" height="30" rx="5"/><text class="c" x="260" y="515" text-anchor="middle">IPS</text>
+    <rect class="chip" x="310" y="496" width="84" height="30" rx="5"/><text class="c" x="352" y="515" text-anchor="middle">SNIPS</text>
+    <rect class="chip" x="402" y="496" width="84" height="30" rx="5"/><text class="c" x="444" y="515" text-anchor="middle">DM (LightGBM)</text>
+    <rect class="chip" x="494" y="496" width="84" height="30" rx="5"/><text class="c" x="536" y="515" text-anchor="middle">DR cross-fit</text>
+    <rect class="chip" x="586" y="496" width="84" height="30" rx="5"/><text class="c" x="628" y="515" text-anchor="middle">Switch-DR</text>
+    <rect class="chip" x="678" y="496" width="88" height="30" rx="5"/><text class="c" x="722" y="515" text-anchor="middle">DRos</text>
+  </g>
+  <text class="m" x="34" y="548">naive baselines (red) vs. causal estimators · support stress test: sweep τ from exploratory → deterministic,</text>
+  <text class="m" x="34" y="562">report effective sample size and where each estimator breaks</text>
+  <path class="flow" d="M280,422 L280,458" marker-end="url(#ar)"/>
+  <path class="tflow" d="M670,422 L670,458" marker-end="url(#arG)"/>
+
+  <!-- 5 & 6 -->
+  <rect class="box" x="20" y="610" width="370" height="108" rx="8"/>
+  <text class="t" x="34" y="632">⑤ Uncertainty</text>
+  <text class="s" x="34" y="654">Episode-level block-bootstrap CIs</text>
+  <text class="s" x="34" y="672">HCOPE: empirical-Bernstein lower bound</text>
+  <text class="s" x="34" y="690">on V(π₁) − V(π₀)</text>
+  <text class="m" x="34" y="708">stretch goal 1: uncertainty on the estimate</text>
+  <rect class="hid" x="410" y="610" width="370" height="108" rx="8"/>
+  <text class="t" x="424" y="632" fill="#b03a2e">⑥ Hidden-confounding bounds</text>
+  <text class="s" x="424" y="654">Marginal sensitivity model: propensity odds ∈ [1/Γ, Γ]</text>
+  <text class="s" x="424" y="672">Sharp quantile-balancing bounds; breakdown Γ*</text>
+  <text class="g" x="424" y="690">Validated: true Γ is known from the β knob</text>
+  <text class="m" x="424" y="708">stretch goal 2: sensitivity to unobserved confounding</text>
+  <path class="flow" d="M205,572 L205,608" marker-end="url(#ar)"/>
+  <path class="flow" d="M595,572 L595,608" marker-end="url(#ar)"/>
+
+  <!-- 7 verdict -->
+  <rect class="box" x="20" y="756" width="760" height="100" rx="8"/>
+  <text class="t" x="34" y="778">⑦ Policy Court (Streamlit dashboard)</text>
+  <text class="s" x="34" y="800">Pick a candidate π₁ → naive vs. every estimator vs. true value, with CIs</text>
+  <text class="s" x="34" y="818">Drag Γ → watch bounds widen and the verdict flip at Γ*</text>
+  <text class="s" x="34" y="838">Rule: DEPLOY only if the lower bound on V(π₁) − V(π₀) &gt; 0</text>
+  <rect x="560" y="784" width="96" height="32" rx="5" fill="#eef8f1" stroke="#1e7a46" stroke-width="2"/>
+  <text x="608" y="805" text-anchor="middle" font-size="12" font-weight="700" fill="#1e7a46">DEPLOY</text>
+  <rect x="664" y="784" width="104" height="32" rx="5" fill="#fdf0ee" stroke="#b03a2e" stroke-width="2"/>
+  <text x="716" y="805" text-anchor="middle" font-size="12" font-weight="700" fill="#b03a2e">DON’T DEPLOY</text>
+  <path class="flow" d="M205,718 L205,754" marker-end="url(#ar)"/>
+  <path class="flow" d="M595,718 L595,754" marker-end="url(#ar)"/>
+
+  <!-- 8 evaluation -->
+  <rect class="tru" x="20" y="894" width="760" height="84" rx="8" stroke-dasharray="6 3"/>
+  <text class="gt" x="34" y="916">⑧ Evaluation harness: estimate vs. truth, 50 candidate policies × 30 seeds</text>
+  <text class="s" x="34" y="938">relative error · uplift sign accuracy · CI coverage &amp; width · effective sample size</text>
+  <text class="s" x="34" y="956">Γ-bound coverage at the true Γ · deploy accuracy &amp; regret vs. naive A/B</text>
+  <path class="flow" d="M400,856 L400,892" marker-end="url(#ar)"/>
+  <path class="tflow" d="M780,90 L792,90 L792,936 L782,936" marker-end="url(#arG)"/>
+</svg>
+</section>
+</body>
+</html>
